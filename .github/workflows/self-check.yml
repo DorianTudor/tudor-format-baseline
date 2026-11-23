@@ -2,7 +2,7 @@ name: Self-check
 
 on:
   push:
-    branches: [main]
+    branches: [staging, main]
     tags: ["v*"]
   pull_request:
 
@@ -28,15 +28,10 @@ jobs:
             exit 1
           fi
 
-      - name: The README names the current version
+      - name: Formatting and versions (the same check as the pre-push hook)
         run: |
-          declared=$(sed -n 's/^  BASELINE_VERSION: //p' .github/workflows/prettier-baseline.yml)
-          grep -qF "Current version: \`$declared\`" README.md || { echo "::error::README.md does not name $declared as the current version"; exit 1; }
-
-      - name: This repository is formatted with its own baseline
-        run: |
-          version=$(sed -n 's/^  PRETTIER_VERSION: //p' .github/workflows/prettier-baseline.yml)
-          npx --yes "prettier@$version" --check .
+          npm ci --no-audit --no-fund
+          npm run check
 
   # why: the reusable workflow fetches the canonical files at its own tag, which exists only once the tag is pushed.
   reusable-workflow-on-itself:

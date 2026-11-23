@@ -1,0 +1,84 @@
+#!/bin/sh
+# Only staging is pushed. Verify the checked-out, clean staging on the build PC, then have
+# Claude review each unpushed commit. main changes only through a pull request from staging.
+set -eu
+
+verify_sha=""
+verify_remote_sha=""
+while read local_ref local_sha remote_ref remote_sha; do
+  remote_sha="$(printf '%s' "$remote_sha" | tr -d '\r')"
+  case "$remote_ref" in
+    refs/heads/main)
+      echo "Direct pushes to main are blocked; main changes only through a pull request from staging." >&2
+      exit 1
+      ;;
+    refs/heads/staging)
+      if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+        echo "staging cannot be deleted." >&2
+        exit 1
+      fi
+      verify_sha="$local_sha"
+      verify_remote_sha="$remote_sha"
+      ;;
+    refs/tags/v*)
+      # why: adopting repositories pin the reusable workflow to a tag, so a tag is the release and must never change.
+      zero="0000000000000000000000000000000000000000"
+      if [ "$local_sha" = "$zero" ] || [ "$remote_sha" != "$zero" ]; then
+        echo "Release tags can be created but never deleted or moved." >&2
+        exit 1
+      fi
+      name="${remote_ref#refs/tags/}"
+      if ! printf '%s' "$name" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+        echo "A release tag must be named vX.Y.Z." >&2
+        exit 1
+      fi
+      if [ "$(git cat-file -t "$local_sha" 2>/dev/null)" != "tag" ]; then
+        echo "A release tag must be annotated (git tag -a $name)." >&2
+        exit 1
+      fi
+      tagged="$(git rev-parse --verify --quiet "$local_sha^{commit}" || true)"
+      if [ -z "$tagged" ] || ! git merge-base --is-ancestor "$tagged" refs/remotes/origin/main 2>/dev/null; then
+        echo "A release tag must point at a commit already on origin/main (run git fetch origin first)." >&2
+        exit 1
+      fi
+      declared="$(git show "$tagged:.github/workflows/prettier-baseline.yml" 2>/dev/null | sed -n 's/^  BASELINE_VERSION: //p' | tr -d '\r')"
+      if [ "$declared" != "$name" ]; then
+        echo "Tag $name does not match BASELINE_VERSION ${declared:-(none)} in the tagged commit." >&2
+        exit 1
+      fi
+      ;;
+    refs/notes/claude-review)
+      # why: the push gate shares its records from inside this hook; they hold no code to verify.
+      zero="0000000000000000000000000000000000000000"
+      # why: a fast-forward can still drop one commit's record, so compare the commits that have a
+      # record on each side; paths without "/" ignore git moving notes into fan-out folders.
+      # It does not check the lines inside a note: keeping every line relies on the gate only appending.
+      removed=""
+      if [ "$local_sha" != "$zero" ] && [ "$remote_sha" != "$zero" ]; then
+        removed="$({ git ls-tree -r --name-only "$remote_sha"; git ls-tree -r --name-only "$local_sha"; git ls-tree -r --name-only "$local_sha"; } 2>/dev/null | tr -d '/' | sort | uniq -u)"
+      fi
+      if [ "$local_sha" = "$zero" ] || [ -n "$removed" ] || { [ "$remote_sha" != "$zero" ] && ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; }; then
+        echo "Gate records can't be deleted or force-rewritten." >&2
+        exit 1
+      fi
+      ;;
+    *)
+      echo "Only staging may be pushed to this repository." >&2
+      exit 1
+      ;;
+  esac
+done
+
+[ -z "$verify_sha" ] && exit 0
+
+if [ "$verify_sha" != "$(git rev-parse HEAD)" ]; then
+  echo "Push the checked-out staging HEAD so the exact commit can be verified." >&2
+  exit 1
+fi
+if [ -n "$(git status --porcelain=v1 -uall)" ]; then
+  echo "The worktree must be clean, including untracked files, before pushing." >&2
+  exit 1
+fi
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-before-push.ps1 -ExpectedHead "$verify_sha"
+node scripts/claude-review-before-push.mjs "$verify_remote_sha" "$verify_sha" refs/heads/staging
