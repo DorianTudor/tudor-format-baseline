@@ -1,0 +1,14 @@
+# --- tudor-baseline v1 (do not edit this block) ---
+node_modules/
+dist/
+build/
+out/
+coverage/
+.next/
+*.min.js
+*.min.css
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+# --- end tudor-baseline ---
+# repo-specific entries below

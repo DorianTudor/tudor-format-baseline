@@ -1,0 +1,114 @@
+name: Tudor Prettier baseline
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "full (JS/TS app with package.json) or docs-only (md, json, yml, yaml)"
+        required: true
+        type: string
+      install-command:
+        description: "Installs dependencies in full mode"
+        required: false
+        type: string
+        default: "npm ci"
+
+permissions:
+  contents: read
+
+env:
+  # why: each tag of this repo carries its own version here, so a caller pinned to @vX.Y.Z compares against the files of that same tag.
+  BASELINE_VERSION: v1.0.0
+  PRETTIER_VERSION: 3.10.1
+  BASELINE_RAW: https://raw.githubusercontent.com/DorianTudor/tudor-format-baseline
+  IGNORE_START: "# --- tudor-baseline v1 (do not edit this block) ---"
+  ATTRIBUTES_START: "# --- tudor-baseline v1 ---"
+  BLOCK_END: "# --- end tudor-baseline ---"
+
+jobs:
+  prettier-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Baseline files match ${{ env.BASELINE_VERSION }}
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -u
+          fail=0
+          error() { echo "::error::$1"; fail=1; }
+
+          case "$MODE" in full|docs-only) ;; *) echo "::error::mode must be full or docs-only, got '$MODE'"; exit 1 ;; esac
+
+          canon="$RUNNER_TEMP/canonical"
+          mkdir -p "$canon"
+          for f in .prettierrc.json .prettierignore .gitattributes; do
+            curl -fsSL "$BASELINE_RAW/$BASELINE_VERSION/$f" -o "$canon/$f" || { echo "::error::Could not fetch $f at $BASELINE_VERSION"; exit 1; }
+          done
+
+          if [ ! -f .prettierrc.json ]; then
+            error ".prettierrc.json is missing"
+          elif ! cmp -s .prettierrc.json "$canon/.prettierrc.json"; then
+            error ".prettierrc.json differs from the baseline at $BASELINE_VERSION"
+          fi
+
+          # Prints the block from its start marker to the end marker, exactly as stored.
+          block() { awk -v s="$2" -v e="$BLOCK_END" '$0 == s { f = 1 } f { print } f && $0 == e { exit }' "$1"; }
+          check_block() {
+            file="$1"; start="$2"
+            if [ ! -f "$file" ]; then error "$file is missing"; return; fi
+            count=$(grep -cxF -- "$start" "$file" || true)
+            if [ "$count" != "1" ]; then error "$file must contain the baseline block exactly once (found $count)"; return; fi
+            if ! diff <(block "$file" "$start") <(block "$canon/$file" "$start") > /dev/null; then
+              error "The baseline block in $file differs from $BASELINE_VERSION"
+            fi
+          }
+          check_block .prettierignore "$IGNORE_START"
+          check_block .gitattributes "$ATTRIBUTES_START"
+
+          others=$(git ls-files | grep -E '(^|/)(\.prettierrc(\.[^/]+)?|prettier\.config\.[^/]+)$' | grep -vxF '.prettierrc.json' || true)
+          if [ -n "$others" ]; then error "Other Prettier configs are not allowed: $(echo $others)"; fi
+
+          while IFS= read -r -d '' pkg; do
+            if ! node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.exit(Object.hasOwn(j, "prettier") ? 1 : 0)' "$pkg"; then
+              error "$pkg has a \"prettier\" key; the baseline .prettierrc.json is the only config"
+            fi
+          done < <(git ls-files -z -- 'package.json' '**/package.json')
+
+          if [ "$MODE" = "full" ]; then
+            if [ ! -f package.json ]; then
+              error "full mode needs a package.json"
+            else
+              pinned=$(node -p 'const j = require("./package.json"); (j.devDependencies || {}).prettier || ""')
+              if [ "$pinned" != "$PRETTIER_VERSION" ]; then
+                error "package.json devDependencies.prettier must be exactly $PRETTIER_VERSION (found '${pinned}')"
+              fi
+            fi
+          fi
+
+          exit $fail
+
+      - name: Install dependencies
+        if: ${{ !cancelled() && inputs.mode == 'full' }}
+        env:
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+        run: bash -c "$INSTALL_COMMAND"
+
+      - name: prettier --check (full)
+        if: ${{ !cancelled() && inputs.mode == 'full' }}
+        run: |
+          installed=$(npx --no-install prettier --version)
+          if [ "$installed" != "$PRETTIER_VERSION" ]; then
+            echo "::error::Installed Prettier is $installed, baseline is $PRETTIER_VERSION"
+            exit 1
+          fi
+          npx --no-install prettier --check .
+
+      - name: prettier --check (docs-only)
+        if: ${{ !cancelled() && inputs.mode == 'docs-only' }}
+        run: npx --yes "prettier@$PRETTIER_VERSION" --check --no-error-on-unmatched-pattern "**/*.{md,json,yml,yaml}"
