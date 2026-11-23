@@ -66,9 +66,15 @@ This repo uses the shared Tudor Prettier baseline (`DorianTudor/tudor-format-bas
 - Repo-specific ignores go below the marker in `.prettierignore`.
 ```
 
+## Working on this repo
+
+- Develop on `staging`. `main` changes only through a pull request from `staging`.
+- To release, push an annotated `vX.Y.Z` tag on a commit already on `origin/main`. The tag name must equal `BASELINE_VERSION` in that commit's workflow. The hook refuses any other tag, and refuses to delete or move a tag.
+- Check: `npm run check`, which runs Prettier and confirms the versions agree. The pre-push hook (`.githooks/pre-push`) runs it on the build PC, then runs the Claude push gate. Keep `git config core.hooksPath .githooks`.
+
 ## Changing the baseline
 
-Changes go through a pull request on this repo. Each one:
+Changes go through a `staging` to `main` pull request on this repo. Each one:
 
 1. Adds a new dated file in `docs/decisions/`, with a diff-size table across every adopting repository.
 2. Updates `BASELINE_VERSION`, and `PRETTIER_VERSION` if it changes, in `.github/workflows/prettier-baseline.yml`. It also updates the current version in this README.

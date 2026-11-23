@@ -12,3 +12,4 @@ pnpm-lock.yaml
 yarn.lock
 # --- end tudor-baseline ---
 # repo-specific entries below
+scripts/claude-review-before-push.mjs

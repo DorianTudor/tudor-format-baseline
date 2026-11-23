@@ -1,0 +1,11 @@
+{
+  "name": "tudor-format-baseline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "prettier --check . && node scripts/check-baseline-versions.mjs"
+  },
+  "devDependencies": {
+    "prettier": "3.10.1"
+  }
+}
