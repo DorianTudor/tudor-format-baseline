@@ -7,18 +7,13 @@ on:
         description: "full (JS/TS app with package.json) or docs-only (md, json, yml, yaml)"
         required: true
         type: string
-      install-command:
-        description: "Installs dependencies in full mode"
-        required: false
-        type: string
-        default: "npm ci"
 
 permissions:
   contents: read
 
 env:
   # why: each tag of this repo carries its own version here, so a caller pinned to @vX.Y.Z compares against the files of that same tag.
-  BASELINE_VERSION: v1.0.0
+  BASELINE_VERSION: v1.0.1
   PRETTIER_VERSION: 3.10.1
   BASELINE_RAW: https://raw.githubusercontent.com/DorianTudor/tudor-format-baseline
   IGNORE_START: "# --- tudor-baseline v1 (do not edit this block) ---"
@@ -93,21 +88,10 @@ jobs:
 
           exit $fail
 
-      - name: Install dependencies
-        if: ${{ !cancelled() && inputs.mode == 'full' }}
-        env:
-          INSTALL_COMMAND: ${{ inputs.install-command }}
-        run: bash -c "$INSTALL_COMMAND"
-
+      # why: installing the repository's dependencies needs registry access for private packages; the pin check above already ties package.json to this version.
       - name: prettier --check (full)
         if: ${{ !cancelled() && inputs.mode == 'full' }}
-        run: |
-          installed=$(npx --no-install prettier --version)
-          if [ "$installed" != "$PRETTIER_VERSION" ]; then
-            echo "::error::Installed Prettier is $installed, baseline is $PRETTIER_VERSION"
-            exit 1
-          fi
-          npx --no-install prettier --check .
+        run: npx --yes "prettier@$PRETTIER_VERSION" --check .
 
       - name: prettier --check (docs-only)
         if: ${{ !cancelled() && inputs.mode == 'docs-only' }}
