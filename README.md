@@ -2,7 +2,7 @@
 
 This repo holds the single Prettier setup shared by Tudor repositories, plus a reusable GitHub Actions workflow that checks a repository against it.
 
-Current version: `v1.0.0` (Prettier `3.10.1`).
+Current version: `v1.0.1` (Prettier `3.10.1`).
 
 ## What is in it
 
@@ -21,7 +21,7 @@ The workflow fails if any of these is true:
 - Any other Prettier config exists: `.prettierrc` in another format or folder, `prettier.config.*`, or a `"prettier"` key in a `package.json`.
 - In `full` mode, the root `package.json` does not pin `prettier` in `devDependencies` to exactly the baseline version.
 - `prettier --check` fails.
-  - `full` mode runs the install command (default `npm ci`), then the repository's own pinned Prettier.
+  - `full` mode runs the baseline's Prettier version on the whole repository, without installing its dependencies, so private packages need no registry token.
   - `docs-only` mode runs the pinned Prettier on `**/*.{md,json,yml,yaml}`.
 
 ## Adopting it
@@ -41,10 +41,9 @@ The workflow fails if any of these is true:
        branches: [staging, main]
    jobs:
      prettier:
-       uses: DorianTudor/tudor-format-baseline/.github/workflows/prettier-baseline.yml@v1.0.0
+       uses: DorianTudor/tudor-format-baseline/.github/workflows/prettier-baseline.yml@v1.0.1
        with:
          mode: full # or docs-only
-         # install-command: pnpm install --frozen-lockfile   # only if the repository does not use npm
    ```
 
 4. Renormalise line endings in their own commit: `git add --renormalize .`.
