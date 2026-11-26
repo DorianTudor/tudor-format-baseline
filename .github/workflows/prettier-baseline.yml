@@ -13,7 +13,7 @@ permissions:
 
 env:
   # why: each tag of this repo carries its own version here, so a caller pinned to @vX.Y.Z compares against the files of that same tag.
-  BASELINE_VERSION: v1.0.1
+  BASELINE_VERSION: v1.1.0
   PRETTIER_VERSION: 3.10.1
   BASELINE_RAW: https://raw.githubusercontent.com/DorianTudor/tudor-format-baseline
   IGNORE_START: "# --- tudor-baseline v1 (do not edit this block) ---"

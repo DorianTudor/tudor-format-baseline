@@ -2,7 +2,7 @@
 
 This repo holds the single Prettier setup shared by Tudor repositories, plus a reusable GitHub Actions workflow that checks a repository against it.
 
-Current version: `v1.0.1` (Prettier `3.10.1`).
+Current version: `v1.1.0` (Prettier `3.10.1`).
 
 ## What is in it
 
@@ -41,7 +41,7 @@ The workflow fails if any of these is true:
        branches: [staging, main]
    jobs:
      prettier:
-       uses: DorianTudor/tudor-format-baseline/.github/workflows/prettier-baseline.yml@v1.0.1
+       uses: DorianTudor/tudor-format-baseline/.github/workflows/prettier-baseline.yml@v1.1.0
        with:
          mode: full # or docs-only
    ```
